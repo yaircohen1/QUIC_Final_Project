@@ -235,9 +235,9 @@ def parse_short_header_packet(packet):
     return header_form, fixed_bit, spin_bit, key_phase, dest_cid, packet_number, frames
 
 # Function to send ACK packet
-def send_ack(socket, address, dest_cid):
+def send_ack(socket, address, dest_cid, packet_number):
     ack_frame = build_frame(ACK, 0, 0, b'')  # ACK frame
-    short_packet = build_short_header_packet(dest_cid, 0, [ack_frame], 0, 0)
+    short_packet = build_short_header_packet(dest_cid, packet_number, [ack_frame], 0, 0)
     packet_size = len(short_packet)
     sent_ack = socket.sendto(short_packet, address)
     if sent_ack != len(short_packet):
@@ -246,14 +246,27 @@ def send_ack(socket, address, dest_cid):
 
 # Function to send data
 def send_data(client_socket, server_address, packet_number, data, dest_cid):
-    data_frame = build_frame(DATA, 0, 0, data)  # Data frame
-    short_packet = build_short_header_packet(dest_cid, packet_number, [data_frame], 1, 0)
+    # Split the data into 5 frames
+    frame_size = len(data) // 5
+    frames = []
+
+    for i in range(5):
+        start = i * frame_size
+        end = start + frame_size if i < 4 else len(data)
+        frame_data = data[start:end]
+        data_frame = build_frame(DATA, 0, i * frame_size, frame_data)  # Data frame
+        frames.append(data_frame)
+
+    short_packet = build_short_header_packet(dest_cid, packet_number, frames, 1, 0)
+
+    # Send the packet to the server
     packet_size = len(short_packet)
     sent_data = client_socket.sendto(short_packet, server_address)
-    if sent_data != len(short_packet):
-        print("Error sending the data packet to the server")
+    if sent_data != packet_size:
         return False
+
     return packet_size
+
 
 # Function to receive data
 def receive_data(socket):
@@ -270,11 +283,11 @@ def receive_ack(socket):
     if not data:
         print("Error: No data received from the server.")
         return False
-    _, _, _, _, _, _, frames = parse_short_header_packet(data)
+    _, _, _, _, _, packet_number, frames = parse_short_header_packet(data)
     if frames[0][0] != ACK:
         print("Error: Expected ACK frame from the server")
         return False
-    return True
+    return packet_number
 
 # Handshake functions
 # Function to send the first message 'ClientHello' to the server
@@ -404,8 +417,8 @@ def send_file(client_socket, server_address, dest_cid, file_path, packet_list, s
                     return False
                 sent_data_time = time.time()
                 ack_received = receive_ack(client_socket)
-                if not ack_received:
-                    print("Error receiving ACK from the server")
+                if ack_received != packet_number:
+                    print(f"Error: Expected ACK for packet {packet_number}")
                     return False
                 receive_ack_time = time.time()
                 packet_list.insert(packet_number, receive_ack_time, sent_data_time, sent_data) # Insert the packet send and ACK receive times
@@ -436,7 +449,7 @@ def receive_file(server_socket, output_file_path, client_address):
                     _, _, _, data = frame
                     file.write(data)
 
-                ack_sent = send_ack(server_socket, client_address, dest_cid)
+                ack_sent = send_ack(server_socket, client_address, dest_cid, packet_number)
                 if not ack_sent:
                     print("Error sending ACK to the client")
                     return False
@@ -464,6 +477,19 @@ def send_close(client_socket, server_address, dest_cid, packet_number):
         return False
     print("Sent the close packet to the server")
     return packet_size
+
+# Function to receive close message from the server
+def receive_close(server_socket):
+    data, _ = server_socket.recvfrom(BUFFER_SIZE)
+    if not data:
+        print("Error: No data received from the server.")
+        return False
+    _, _, _, _, _, packet_number, frames = parse_short_header_packet(data)
+    if frames[0][0] != CLOSE:
+        print("Error: Expected CLOSE frame from the server")
+        return False
+    print("Received the close packet from the server")
+    return packet_number
 
 # Function to simulate network conditions
 def simulate_network_conditions(packet_list, delays):

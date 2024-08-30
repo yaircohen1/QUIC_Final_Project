@@ -136,7 +136,7 @@ def main():
 
     # Receive ACK message from the server
     ack_message = receive_ack(client_socket)
-    if ack_message is False:
+    if ack_message != 1:
         print("Error receiving the ACK message from the server.")
         sys.exit(1)
     print("ACK message received from the server.")
@@ -154,7 +154,7 @@ def main():
     server_cid = server_rejection
 
     # Send ACK message to the server
-    ack_message = send_ack(client_socket, server_address, server_cid)
+    ack_message = send_ack(client_socket, server_address, server_cid,1)
     if ack_message is False:
         print("Error sending the ACK message to the server.")
         sys.exit(1)
@@ -169,8 +169,8 @@ def main():
 
     # Receive the ACK message from the server
     ack_message = receive_ack(client_socket)
-    if ack_message is False:
-        print("Error receiving the ACK message from the server.")
+    if ack_message != 2:
+        print("Error receiving the ACK message from the server for packet 2.")
         sys.exit(1)
     print("ACK message received from the server.")
     receive_ack2_time = time.time()
@@ -186,7 +186,7 @@ def main():
     print("Symmetric key established")
 
     # Send the ACK message to the server
-    ack_message = send_ack(client_socket, server_address, server_cid)
+    ack_message = send_ack(client_socket, server_address, server_cid, 2)
     if ack_message is False:
         print("Error sending the ACK message to the server.")
         sys.exit(1)
@@ -214,8 +214,8 @@ def main():
 
     # Receive the ACK message from the server
     ack_message = receive_ack(client_socket)
-    if ack_message is False:
-        print("Error receiving the ACK message from the server.")
+    if ack_message != packet_number_counter:
+        print("Error receiving the ACK message from the server for the close message.")
         sys.exit(1)
     print("ACK message received from the server.")
     receive_ack3_time = time.time()

@@ -91,7 +91,7 @@ def main ():
         sys.exit(1)
 
     # Send the client ACK message
-    ack_message = send_ack(server_socket, client_address, client_cid)
+    ack_message = send_ack(server_socket, client_address, client_cid, 1)
     if ack_message is False:
         print("Error sending the ACK message.")
         sys.exit(1)
@@ -106,8 +106,8 @@ def main ():
 
     # Receive ACK message from the client
     ack_message = receive_ack(server_socket)
-    if ack_message is False:
-        print("Error receiving the ACK message.")
+    if ack_message != 1:
+        print("Error receiving the ACK message from the client for packet 1.")
         sys.exit(1)
     print("Received the ACK message from the client.")
     receive_ack_time = time.time()
@@ -122,7 +122,7 @@ def main ():
     print("Symmetric key is established.")
 
     # Send ACK message to the client
-    ack_message = send_ack(server_socket, client_address, client_cid)
+    ack_message = send_ack(server_socket, client_address, client_cid, 2)
     if ack_message is False:
         print("Error sending the ACK message.")
         sys.exit(1)
@@ -137,7 +137,7 @@ def main ():
 
     # Receive the ACK message from the client
     ack_message = receive_ack(server_socket)
-    if ack_message is False:
+    if ack_message != 2:
         print("Error receiving the ACK message.")
         sys.exit(1)
     print("Received the ACK message from the client.")
@@ -155,12 +155,18 @@ def main ():
         # Receive the file from the client
         success = receive_file(server_socket, full_file_path, client_address) # Save the file in the folder
         if not success:
-            print("Error receiving the file from the client.")
+            print("Not Success: Error receiving the file from the client.")
             sys.exit(1)
         print(f"Received the file {file_name} from the client {times} times.")
 
+    # Receive close message from the client
+    close_message = receive_close(server_socket)
+    if close_message is False:
+        print("Error receiving the close message.")
+        sys.exit(1)
+
     # Send the last ACK message from the client
-    ack_message = send_ack(server_socket, client_address, client_cid)
+    ack_message = send_ack(server_socket, client_address, client_cid, close_message)
     if ack_message is False:
         print("Error sending the ACK message.")
         sys.exit(1)
