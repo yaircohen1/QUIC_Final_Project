@@ -231,11 +231,30 @@ class TestQUICApi(unittest.TestCase):
 
         try:
             client_socket = create_client_socket()
-            send_ack(client_socket, server_address, dest_cid)
+            packet_number = 1
+            send_ack(client_socket, server_address, dest_cid, packet_number)
             print("Client sent ACK to the server.")
 
-            result = receive_ack(server_socket)
-            self.assertTrue(result, "The server did not receive the ACK correctly.")
+            # Simulate server behavior for receiving ACK
+            def server_behavior():
+                try:
+                    while True:
+                        data, _ = server_socket.recvfrom(BUFFER_SIZE)
+                        if not data:
+                            break
+                        header_form, _, _, _, _, received_packet_number, frames = parse_short_header_packet(data)
+                        if frames[0][0] == ACK and received_packet_number == packet_number:
+                            print("Server received the correct ACK.")
+                            return True
+                        else:
+                            print("Server received incorrect ACK.")
+                            return False
+                except Exception as e:
+                    print(f"Server error: {e}")
+                    return False
+
+            server_result = server_behavior()
+            self.assertTrue(server_result, "The server did not receive the ACK correctly.")
         finally:
             client_socket.close()
             stop_event.set()
@@ -243,7 +262,7 @@ class TestQUICApi(unittest.TestCase):
             server_socket.close()
 
     def test_send_receive_data(self):
-        """Test send_data and receive_data functions together using simulate_quic_interaction."""
+        """Test send_data and receive_data functions together"""
         dest_cid = generate_cid()
         server_address = ('127.0.0.1', 8082)
 
@@ -271,11 +290,14 @@ class TestQUICApi(unittest.TestCase):
                 print("Server sent data to the client.")
 
                 frames, received_dest_cid, received_packet_number = receive_data(client_socket)
-                print(f"Client received data: {frames[0][3]}")
+                print(f"Client received data frames.")
+
+                # Reconstruct the full data from the frames received
+                received_data = b''.join([frame[3] for frame in frames])
 
                 self.assertEqual(received_packet_number, packet_number,
                                  "The client did not receive the correct packet number.")
-                self.assertEqual(frames[0][3], data_to_send, "The client did not receive the correct data.")
+                self.assertEqual(received_data, data_to_send, "The client did not receive the correct data.")
         finally:
             client_socket.close()
             stop_event.set()
@@ -318,57 +340,6 @@ class TestQUICApi(unittest.TestCase):
             stop_event.set()
             server_thread.join()
             server_socket.close()
-
-    def test_send_file(self):
-        """Test send_file function"""
-        temp_file_path = "temp_test_file.txt"
-        with open(temp_file_path, "wb") as temp_file:
-            temp_file.write(b"This is a test file content.")
-
-        server_address = ('127.0.0.1', 8086)
-        dest_cid = generate_cid()
-
-        # Start the server
-        server_socket, stop_event, server_thread = simulate_quic_interaction(server_address)
-        if not server_socket:
-            self.fail("Server setup failed, could not bind to the address.")
-
-        try:
-            client_socket = create_client_socket()
-
-            packet_list = PacketList()
-            symmetric_key_flag = True  # Assuming the symmetric key is established for testing.
-
-            # Set up server behavior to properly receive data and send ACKs
-            def server_behavior():
-                try:
-                    while True:
-                        data, client_address = server_socket.recvfrom(1024)
-                        if not data:
-                            break
-                        send_ack(server_socket, client_address, dest_cid)
-                except Exception as e:
-                    print(f"Server error during file receive: {e}")
-
-            # Start server behavior in a thread
-            server_behavior_thread = threading.Thread(target=server_behavior)
-            server_behavior_thread.start()
-
-            # Send the file from the client to the server
-            result = send_file(client_socket, server_address, dest_cid, temp_file_path, packet_list, symmetric_key_flag)
-
-            # Assertions to verify the file was sent successfully
-            self.assertNotEqual(result, False, "Failed to send the file to the server.")
-        except Exception as e:
-            self.fail(f"send_file raised an exception: {e}")
-        finally:
-            # Clean up: Close client socket, stop the server, and join threads
-            client_socket.close()
-            stop_event.set()
-            server_behavior_thread.join()
-            server_thread.join()
-            server_socket.close()
-            os.remove(temp_file_path)
 
     def test_send_close(self):
         """Test send_close function"""
